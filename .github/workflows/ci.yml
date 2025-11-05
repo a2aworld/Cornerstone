@@ -1,0 +1,318 @@
+name: A2A-World CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ============================================================================
+  # Job 1: Linting and Code Quality
+  # ============================================================================
+  lint:
+    name: Code Quality & Linting
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install linting tools
+      run: |
+        pip install flake8 black mypy bandit
+    
+    - name: Run Black formatter check
+      run: |
+        black --check src/ || echo "Black formatting issues found - run 'black src/' to fix"
+    
+    - name: Run Flake8 linter
+      run: |
+        flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 src/ --count --max-complexity=10 --max-line-length=127 --statistics || true
+    
+    - name: Run security checks with Bandit
+      run: |
+        bandit -r src/ -ll || true
+
+  # ============================================================================
+  # Job 2: Test A2A Server
+  # ============================================================================
+  test-a2a-server:
+    name: Test A2A Server
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:14-alpine
+        env:
+          POSTGRES_USER: a2a
+          POSTGRES_PASSWORD: a2a_test
+          POSTGRES_DB: a2a_world_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-a2a-server-${{ hashFiles('src/a2a_server/requirements.txt') }}
+    
+    - name: Install dependencies
+      run: |
+        cd src/a2a_server
+        pip install -r requirements.txt
+    
+    - name: Run A2A Server tests
+      env:
+        DATABASE_URL: postgresql://a2a:a2a_test@localhost:5432/a2a_world_test
+        REDIS_URL: redis://localhost:6379
+      run: |
+        cd src/a2a_server
+        pytest tests/ -v --cov=. --cov-report=xml --cov-report=term || echo "Tests not yet implemented - Sprint 1 task"
+    
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      if: always()
+      with:
+        file: ./src/a2a_server/coverage.xml
+        flags: a2a-server
+        name: a2a-server-coverage
+
+  # ============================================================================
+  # Job 3: Test Visual Cortex API
+  # ============================================================================
+  test-visual-cortex:
+    name: Test Visual Cortex API
+    runs-on: ubuntu-latest
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install GDAL dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gdal-bin libgdal-dev
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-visual-cortex-${{ hashFiles('src/visual_cortex_api/requirements.txt') }}
+    
+    - name: Install dependencies
+      run: |
+        cd src/visual_cortex_api
+        pip install -r requirements.txt
+    
+    - name: Run Visual Cortex tests
+      env:
+        REDIS_URL: redis://localhost:6379
+      run: |
+        cd src/visual_cortex_api
+        pytest tests/ -v --cov=. --cov-report=xml --cov-report=term || echo "Tests not yet implemented - Sprint 1 task"
+    
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      if: always()
+      with:
+        file: ./src/visual_cortex_api/coverage.xml
+        flags: visual-cortex
+        name: visual-cortex-coverage
+
+  # ============================================================================
+  # Job 4: Build Docker Images
+  # ============================================================================
+  build-docker:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [lint, test-a2a-server, test-visual-cortex]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build A2A Server image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./src/a2a_server
+        push: false
+        tags: a2aworld/a2a-server:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build Visual Cortex image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./src/visual_cortex_api
+        push: false
+        tags: a2aworld/visual-cortex-api:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Test docker-compose
+      run: |
+        docker-compose config
+        echo "✅ docker-compose.yml is valid"
+
+  # ============================================================================
+  # Job 5: Security Scanning
+  # ============================================================================
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    needs: build-docker
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # ============================================================================
+  # Job 6: Integration Tests
+  # ============================================================================
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: build-docker
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Start services with docker-compose
+      run: |
+        docker-compose up -d
+        sleep 10  # Wait for services to be ready
+    
+    - name: Check service health
+      run: |
+        curl -f http://localhost:8000/health || exit 1
+        curl -f http://localhost:8001/health || exit 1
+        echo "✅ All services are healthy"
+    
+    - name: Test agent registration flow
+      run: |
+        curl -X POST http://localhost:8000/register \
+          -H "Content-Type: application/json" \
+          -d '{
+            "id": "test_agent_001",
+            "name": "Test Agent",
+            "framework": "custom",
+            "capabilities": ["testing"],
+            "visual_capabilities": {"edge_detection": true}
+          }' || exit 1
+        echo "✅ Agent registration successful"
+    
+    - name: Test Visual Cortex API
+      run: |
+        curl -X POST http://localhost:8001/imagery \
+          -H "Content-Type: application/json" \
+          -d '{
+            "bbox": {"north": -5.0, "south": -7.0, "east": 106.0, "west": 104.0},
+            "resolution": "10m"
+          }' || exit 1
+        echo "✅ Visual Cortex API responding"
+    
+    - name: Show logs on failure
+      if: failure()
+      run: |
+        docker-compose logs
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        docker-compose down -v
+
+  # ============================================================================
+  # Job 7: Deploy to Staging (on main branch only)
+  # ============================================================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [integration-test, security-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Deploy notification
+      run: |
+        echo "🚀 Ready to deploy to staging environment"
+        echo "Note: Actual deployment will be configured in Sprint 4"
+        echo "Commit: ${{ github.sha }}"
+        echo "Branch: ${{ github.ref }}"

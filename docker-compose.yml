@@ -1,20 +1,92 @@
-version: "3.9"
+# A2A-World Development Environment
+# docker-compose.yml - The Heart of the Beanstalk
+# Run 'docker-compose up' to start the entire A2A-World ecosystem
+
+version: '3.8'
+
 services:
-  gateway:
-    build: .
-    container_name: a2aworld-gateway
+  # PostgreSQL Database - Persistent storage for agents, tasks, and artifacts
+  postgres:
+    image: postgres:14-alpine
+    container_name: a2a_postgres
+    environment:
+      POSTGRES_USER: a2a
+      POSTGRES_PASSWORD: a2a_dev_password
+      POSTGRES_DB: a2a_world
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U a2a"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - a2a_network
+
+  # Redis Cache - For visual dataset metadata and session management
+  redis:
+    image: redis:7-alpine
+    container_name: a2a_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - a2a_network
+
+  # A2A Server - Central hub for agent registration and task routing
+  a2a-server:
+    build:
+      context: ./src/a2a_server
+      dockerfile: Dockerfile
+    container_name: a2a_server
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./src/a2a_server:/app
     ports:
       - "8000:8000"
     environment:
-      - UVICORN_WORKERS=1
-    command: ["uvicorn", "a2aworld.a2a_gateway.main:app", "--host", "0.0.0.0", "--port", "8000"]
-    restart: unless-stopped
-# Future services (to be added):
-#  postgis:
-#    image: postgis/postgis:16-3.4
-#  neo4j:
-#    image: neo4j:5
-#  redis:
-#    image: redis:7
-#  minio:
-#    image: minio/minio
+      - DATABASE_URL=postgresql://a2a:a2a_dev_password@postgres:5432/a2a_world
+      - REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - a2a_network
+
+  # Visual Cortex API - The eyes of A2A-World
+  visual-cortex-api:
+    build:
+      context: ./src/visual_cortex_api
+      dockerfile: Dockerfile
+    container_name: a2a_visual_cortex
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+    volumes:
+      - ./src/visual_cortex_api:/app
+    ports:
+      - "8001:8001"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=development
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - a2a_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  a2a_network:
+    driver: bridge
