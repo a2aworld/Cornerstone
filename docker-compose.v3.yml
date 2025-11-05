@@ -1,0 +1,100 @@
+# A2A-World V3.0: The Planetary Rosetta Stone
+# Simplified MVP - Docker Compose Configuration
+# "Give them sight. Ask one question. Collect answers."
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database - The 3-Table Foundation
+  postgres:
+    image: postgres:14-alpine
+    container_name: a2a_v3_postgres
+    environment:
+      POSTGRES_USER: a2a
+      POSTGRES_PASSWORD: a2a_dev_password
+      POSTGRES_DB: a2a_world_v3
+    volumes:
+      - postgres_v3_data:/var/lib/postgresql/data
+      - ./src/database/v3_simplified_schema.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U a2a -d a2a_world_v3"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - a2a_v3_network
+
+  # Redis Cache - Fast access to frequently queried consensus data
+  redis:
+    image: redis:7-alpine
+    container_name: a2a_v3_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - a2a_v3_network
+
+  # A2A Server V3 - The 3 Sacred Endpoints
+  a2a-server-v3:
+    build:
+      context: ./src/a2a_server
+      dockerfile: Dockerfile.v3
+    container_name: a2a_v3_server
+    command: uvicorn v3_main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./src/a2a_server:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://a2a:a2a_dev_password@postgres:5432/a2a_world_v3
+      - REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=development
+      - GEBCO_WMS_URL=https://www.gebco.net/data_and_products/gebco_web_services/web_map_service/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - a2a_v3_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_v3_data:
+    driver: local
+
+networks:
+  a2a_v3_network:
+    driver: bridge
+
+# ============================================================================
+# USAGE INSTRUCTIONS
+# ============================================================================
+#
+# Start the entire A2A-World V3.0 environment:
+#   docker-compose -f docker-compose.v3.yml up --build
+#
+# Access the API:
+#   http://localhost:8000
+#   http://localhost:8000/docs (Interactive API documentation)
+#
+# Access the database:
+#   psql postgresql://a2a:a2a_dev_password@localhost:5432/a2a_world_v3
+#
+# Stop the environment:
+#   docker-compose -f docker-compose.v3.yml down
+#
+# Reset everything (WARNING: deletes all data):
+#   docker-compose -f docker-compose.v3.yml down -v
+#
+# ============================================================================
