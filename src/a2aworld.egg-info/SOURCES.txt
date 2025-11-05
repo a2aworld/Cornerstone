@@ -1,0 +1,11 @@
+LICENSE
+README.md
+pyproject.toml
+src/a2aworld/__init__.py
+src/a2aworld.egg-info/PKG-INFO
+src/a2aworld.egg-info/SOURCES.txt
+src/a2aworld.egg-info/dependency_links.txt
+src/a2aworld.egg-info/requires.txt
+src/a2aworld.egg-info/top_level.txt
+src/a2aworld/a2a_gateway/__init__.py
+src/a2aworld/a2a_gateway/main.py

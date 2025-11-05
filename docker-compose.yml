@@ -1,0 +1,20 @@
+version: "3.9"
+services:
+  gateway:
+    build: .
+    container_name: a2aworld-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - UVICORN_WORKERS=1
+    command: ["uvicorn", "a2aworld.a2a_gateway.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+# Future services (to be added):
+#  postgis:
+#    image: postgis/postgis:16-3.4
+#  neo4j:
+#    image: neo4j:5
+#  redis:
+#    image: redis:7
+#  minio:
+#    image: minio/minio
