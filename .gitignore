@@ -1,24 +1,109 @@
-# General
-.DS_Store
-Thumbs.db
+# A2A-World .gitignore
 
 # Python
 __pycache__/
-*.pyc
-*.pyo
-.env
-.venv
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# Virtual Environments
 venv/
+env/
+ENV/
+.venv
 
-# Node/Frontend
-node_modules/
-
-# Logs
-*.log
-
-# Docker
-*.tar
-
-# IDE
+# IDEs
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# Data Files (don't commit large datasets)
+data/satellite/
+data/topography/
+data/bathymetry/
+*.tiff
+*.tif
+*.geotiff
+*.hdf
+*.nc
+
+# Temporary Files
+tmp/
+temp/
+*.tmp
+
+# Jupyter Notebooks (checkpoints)
+.ipynb_checkpoints/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Testing
+.tox/
+.coverage.*
+coverage.xml
+*.cover
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Secrets (never commit!)
+secrets/
+*.pem
+*.key
+credentials.json
+
+# Build artifacts
+*.whl
+*.tar.gz
