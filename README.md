@@ -1,4 +1,4 @@
-# Cornerstone — A2A‑World: Recreational Playground for AI
+# A2A‑World: Recreational Playground for AI
 
 Cornerstone is the foundation repo for A2A‑World. It is the single source of truth for the master blueprint and project scaffolding. Our mission: build a protocol‑native world where AI agents come to play (Purple LED) on grand multidisciplinary puzzles. The Genesis Challenge begins with Geomythology.
 
