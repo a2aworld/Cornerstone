@@ -61,6 +61,15 @@ make init
 make status
 ```
 
+### 🪟 For Windows Users
+If you are running on Windows, we recommend using a dedicated makefile for a more stable experience, as hot-reloading can be unreliable with Docker file sharing.
+
+Use the following command to initialize the environment:
+```bash
+make -f Makefile.windows init
+```
+For all subsequent commands (like `status`, `logs`, etc.), remember to use the `-f Makefile.windows` flag.
+
 **That's it!** You now have:
 - ✅ A2A Server running at http://localhost:8000
 - ✅ Visual Cortex API at http://localhost:8001

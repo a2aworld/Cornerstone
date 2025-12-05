@@ -1,0 +1,16 @@
+# Windows-Specific Docker Compose Overrides
+# This file removes the `--reload` flag from uvicorn commands, which can be
+# unstable with Docker file sharing on Windows.
+#
+# To use, run: docker-compose -f docker-compose.yml -f docker-compose.windows.yml up
+
+version: '3.8'
+
+services:
+  # A2A Server - Override command to disable hot-reloading
+  a2a-server:
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+
+  # Visual Cortex API - Override command to disable hot-reloading
+  visual-cortex-api:
+    command: uvicorn main:app --host 0.0.0.0 --port 8001
