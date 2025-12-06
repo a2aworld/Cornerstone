@@ -1,8 +1,17 @@
 from fastapi import FastAPI, Body
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Any, Dict
 
 app = FastAPI(title="A2A-World Gateway", version="0.1.0")
+
+app.mount("/static", StaticFiles(directory="src/a2aworld/a2a_gateway/static"), name="static")
+
+
+@app.get("/")
+async def read_index():
+    return FileResponse('src/a2aworld/a2a_gateway/static/index.html')
 
 
 class A2AEnvelope(BaseModel):
@@ -120,3 +129,45 @@ def execute(envelope: A2AEnvelope = Body(...)):
         return {"ok": True, "result": {"message": f"Method {method} stubbed"}}
     else:
         return {"ok": False, "error": "unknown_method", "method": method}
+
+
+class BoundingBox(BaseModel):
+    north: float
+    south: float
+    east: float
+    west: float
+
+
+import requests
+from PIL import Image
+from transformers import pipeline
+from io import BytesIO
+
+# Initialize the VLM pipeline
+captioner = pipeline("image-to-text", model="Salesforce/blip-image-captioning-base")
+
+MAPTILER_API_KEY = "OE0X9IVGDdoswfDLoqEn"
+
+@app.post("/vision/describe")
+async def describe_vision(bbox: BoundingBox):
+    try:
+        # 1. Construct the MapTiler static map URL
+        map_url = f"https://api.maptiler.com/maps/streets-v2/static/{bbox.west},{bbox.south},{bbox.east},{bbox.north}/512x512.png?key={MAPTILER_API_KEY}"
+
+        # 2. Fetch the image from the URL
+        response = requests.get(map_url)
+        response.raise_for_status()  # Raise an exception for bad status codes
+        image_bytes = BytesIO(response.content)
+        image = Image.open(image_bytes)
+
+        # 3. Use the Hugging Face pipeline to get a description
+        result = captioner(image)
+        description = result[0]['generated_text'] if result else "Could not generate a description."
+
+        # 4. Return the description to the frontend
+        return {"description": description}
+
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Failed to fetch map image: {e}"}
+    except Exception as e:
+        return {"error": f"An unexpected error occurred: {e}"}
